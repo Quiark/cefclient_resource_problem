@@ -21,6 +21,8 @@ void RegisterCustomSchemes(CefRefPtr<CefSchemeRegistrar> registrar,
 // Create the scheme handler.
 void InitTest();
 
+void cont();
+
 }  // namespace scheme_test
 
 #endif  // CEF_TESTS_CEFCLIENT_SCHEME_TEST_H_

@@ -350,7 +350,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam,
       // Parse the menu selections:
       switch (wmId) {
       case IDM_ABOUT:
-        DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
+		  scheme_test::cont();
+        //DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
         return 0;
       case IDM_EXIT:
         if (g_handler.get())

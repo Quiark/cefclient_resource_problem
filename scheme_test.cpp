@@ -5,6 +5,8 @@
 #include "cefclient/scheme_test.h"
 #include <algorithm>
 #include <string>
+#include <iostream>
+#include <fstream>
 #include "include/cef_browser.h"
 #include "include/cef_callback.h"
 #include "include/cef_frame.h"
@@ -134,6 +136,86 @@ class ClientSchemeHandler : public CefResourceHandler {
   IMPLEMENT_LOCKING(ClientSchemeHandler);
 };
 
+class CrashSchemeHandler;
+CrashSchemeHandler *g_csh = NULL;
+
+
+class CrashSchemeHandler: public CefResourceHandler {
+	IMPLEMENT_REFCOUNTING(CrashSchemeHandler);
+	IMPLEMENT_LOCKING(CrashSchemeHandler);
+
+public:
+	CefRefPtr<CefCallback> m_callback;
+	int m_p;
+	std::ifstream m_stream;
+
+	CrashSchemeHandler(): m_p(0), m_stream("C:\\Temp\\small.webm", std::ios::binary) {
+		g_csh = this;
+	}
+
+	virtual bool ProcessRequest(CefRefPtr<CefRequest> request, CefRefPtr<CefCallback> callback) OVERRIDE {
+			REQUIRE_IO_THREAD();
+			AutoLock lock_scope(this);
+
+			callback->Continue();
+			return true;
+	}
+
+	virtual bool ReadResponse(void* data_out, int bytes_to_read, int& bytes_read, CefRefPtr<CefCallback> callback) OVERRIDE {
+		REQUIRE_IO_THREAD();
+		AutoLock lock_scope(this);
+
+		m_p ++;
+		
+		bool ready;
+		
+		if (m_p == 1) {
+			ready = false;
+		} else if (m_p == 2) {
+			ready = true;
+		} else if (m_p == 3) {
+			ready = false;
+		} else {
+			ready = true;
+		}
+
+
+		if (!ready) {
+			m_callback = callback;
+			bytes_read = 0;
+			return true;
+		} else {
+			bytes_read = this->Read(data_out, bytes_to_read);
+			return bytes_read > 0;
+		}
+	}
+
+	int Read(void *data_out, int size) {
+		int pos = m_stream.tellg();
+		m_stream.read(reinterpret_cast<char*>(data_out), size);
+		return static_cast<int>(m_stream.tellg()) - pos;
+	}
+
+	virtual void GetResponseHeaders(CefRefPtr<CefResponse> response,  int64& response_length, CefString& redirectUrl) OVERRIDE {
+		REQUIRE_IO_THREAD();
+
+		response->SetMimeType("application/octet-stream");
+		response->SetStatus(200);
+
+		// Set the resulting response length
+		m_stream.seekg(0, std::ios::end);
+		response_length = m_stream.tellg();
+		m_stream.seekg(0, std::ios::beg);
+	}
+
+	virtual void Cancel() OVERRIDE {
+		REQUIRE_IO_THREAD();
+	}
+};
+
+
+
+
 // Implementation of the factory for for creating schema handlers.
 class ClientSchemeHandlerFactory : public CefSchemeHandlerFactory {
  public:
@@ -144,7 +226,8 @@ class ClientSchemeHandlerFactory : public CefSchemeHandlerFactory {
                                                CefRefPtr<CefRequest> request)
                                                OVERRIDE {
     REQUIRE_IO_THREAD();
-    return new ClientSchemeHandler();
+
+		return new CrashSchemeHandler();
   }
 
   IMPLEMENT_REFCOUNTING(ClientSchemeHandlerFactory);
@@ -160,6 +243,14 @@ void RegisterCustomSchemes(CefRefPtr<CefSchemeRegistrar> registrar,
 void InitTest() {
   CefRegisterSchemeHandlerFactory("client", "tests",
       new ClientSchemeHandlerFactory());
+}
+
+void cont() {
+	if (g_csh) {
+		if (g_csh->m_callback != NULL) {
+			g_csh->m_callback->Continue();
+		}
+	}
 }
 
 }  // namespace scheme_test
